@@ -9,6 +9,8 @@ import savedFacilitiesRouter from './routes/savedFacilities';
 import reportsRouter from './routes/reports';
 import repRouter from './routes/rep';
 import adminRouter from './routes/admin';
+import appointmentsRouter from './routes/appointments';
+import pharmacyOrdersRouter from './routes/pharmacyOrders';
 import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -46,6 +48,8 @@ app.use('/api/saved-facilities', savedFacilitiesRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/rep', repRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/appointments', appointmentsRouter);
+app.use('/api/pharmacy-orders', pharmacyOrdersRouter);
 
 // Centralized error handler
 app.use(errorHandler);

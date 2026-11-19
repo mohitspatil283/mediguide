@@ -110,6 +110,18 @@ export const RepRevisionsPage: React.FC = () => {
                     <p>{rev.review_notes}</p>
                   </div>
                 )}
+
+                {(rev.status === 'CORRECTION_REQUESTED' || rev.status === 'REJECTED') && (
+                  <div className="pt-2 flex justify-end">
+                    <Link
+                      to="/rep/facility"
+                      className="px-4 py-2 rounded-xl bg-forest-deep hover:bg-forest-dark text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-xs"
+                    >
+                      <span>Correct & Resubmit Updates</span>
+                      <span>→</span>
+                    </Link>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -2,8 +2,307 @@ import { Router, Response } from 'express';
 import { prisma } from '../config/prisma';
 import { authenticate, requireRole, AuthRequest } from '../middleware/auth';
 import { logAuditEvent } from '../utils/audit';
+import { calculateHaversineDistance } from '../utils/haversine';
 
 const router = Router();
+
+// Automated Treatment/Service Cost Comparison ("Healthcare Amazon" Engine)
+router.get('/compare-service', async (req, res: Response) => {
+  try {
+    const {
+      service_id,
+      service_query,
+      city,
+      locality,
+      lat,
+      lng,
+      radius,
+      facility_type,
+      min_price,
+      max_price,
+      verified_only,
+      sort = 'price_asc',
+      page = 1,
+      limit = 8,
+    } = req.query;
+
+    // 1. Fetch all available services for selector pills / dropdown
+    const allServices = await prisma.service.findMany({
+      orderBy: { name: 'asc' },
+    });
+
+    if (allServices.length === 0) {
+      res.json({
+        success: true,
+        service: null,
+        all_services: [],
+        stats: null,
+        facilities: [],
+        pagination: { page: 1, limit: Number(limit), total: 0, total_pages: 0, has_more: false },
+      });
+      return;
+    }
+
+    // 2. Identify the active target service
+    let activeService: any = null;
+    if (service_id) {
+      activeService = allServices.find((s) => s.service_id === parseInt(String(service_id), 10));
+    }
+    if (!activeService && service_query) {
+      const q = String(service_query).toLowerCase().trim();
+      activeService = allServices.find(
+        (s) => s.name.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)
+      );
+    }
+    // Default to first service or popular service like MRI / Consultation if not matched
+    if (!activeService) {
+      activeService =
+        allServices.find((s) => s.name.toLowerCase().includes('mri')) ||
+        allServices.find((s) => s.name.toLowerCase().includes('consultation')) ||
+        allServices[0];
+    }
+
+    // 3. Build Facility filter
+    const facilityWhere: any = {
+      status: { notIn: ['REJECTED', 'ARCHIVED'] },
+    };
+
+    if (city && String(city).toUpperCase() !== 'ALL') {
+      facilityWhere.city = { contains: String(city) };
+    }
+
+    if (locality && String(locality).toUpperCase() !== 'ALL') {
+      facilityWhere.locality = { contains: String(locality) };
+    }
+
+    if (facility_type && String(facility_type).toUpperCase() !== 'ALL') {
+      facilityWhere.facility_type = String(facility_type);
+    }
+
+    // Query facilities that offer this service or have cost records for it
+    const facilitiesWithData = await prisma.facility.findMany({
+      where: facilityWhere,
+      include: {
+        cost_records: {
+          where: { service_id: activeService.service_id },
+        },
+        facility_services: {
+          where: { service_id: activeService.service_id },
+        },
+      },
+    });
+
+    const userLat = lat ? parseFloat(String(lat)) : undefined;
+    const userLng = lng ? parseFloat(String(lng)) : undefined;
+    const maxRadius = radius ? parseFloat(String(radius)) : undefined;
+    const filterMinPrice = min_price ? parseFloat(String(min_price)) : undefined;
+    const filterMaxPrice = max_price ? parseFloat(String(max_price)) : undefined;
+    const isVerifiedOnly = String(verified_only) === 'true';
+
+    // 4. Process facilities: filter by offering & price, compute distance
+    const processedList: any[] = [];
+
+    for (const fac of facilitiesWithData) {
+      const isOffered = fac.facility_services.some((fs) => fs.is_available);
+      const costRecord = fac.cost_records[0];
+
+      // Must offer the service or have a cost record
+      if (!isOffered && !costRecord) continue;
+
+      // Verified only filter
+      if (isVerifiedOnly && costRecord?.verification_status !== 'VERIFIED') {
+        continue;
+      }
+
+      // Compute distance if coordinates provided
+      let distanceKm: number | null = null;
+      if (userLat !== undefined && userLng !== undefined && fac.latitude && fac.longitude) {
+        distanceKm = calculateHaversineDistance(userLat, userLng, fac.latitude, fac.longitude);
+        if (maxRadius !== undefined && distanceKm > maxRadius) {
+          continue;
+        }
+      }
+
+      // Budget filter
+      if (costRecord) {
+        if (filterMinPrice !== undefined && costRecord.amount_max < filterMinPrice) {
+          continue;
+        }
+        if (filterMaxPrice !== undefined && costRecord.amount_min > filterMaxPrice) {
+          continue;
+        }
+      } else if (filterMinPrice !== undefined || filterMaxPrice !== undefined) {
+        // If price filter is active and facility has no cost record, exclude
+        continue;
+      }
+
+      processedList.push({
+        facility_id: fac.facility_id,
+        facility_name: fac.facility_name,
+        facility_type: fac.facility_type,
+        address: fac.address,
+        locality: fac.locality,
+        city: fac.city,
+        state: fac.state,
+        pincode: fac.pincode,
+        latitude: fac.latitude,
+        longitude: fac.longitude,
+        phone: fac.phone,
+        operating_hours: fac.operating_hours,
+        status: fac.status,
+        data_origin: fac.data_origin,
+        distance_km: distanceKm,
+        cost_record: costRecord
+          ? {
+              cost_id: costRecord.cost_id,
+              amount_min: costRecord.amount_min,
+              amount_max: costRecord.amount_max,
+              is_fixed: costRecord.amount_min === costRecord.amount_max,
+              formatted_cost:
+                costRecord.amount_min === costRecord.amount_max
+                  ? `₹${costRecord.amount_min.toLocaleString('en-IN')}`
+                  : `₹${costRecord.amount_min.toLocaleString('en-IN')} - ₹${costRecord.amount_max.toLocaleString('en-IN')}`,
+              currency: costRecord.currency,
+              unit_basis: costRecord.unit_basis,
+              source: costRecord.source,
+              verification_status: costRecord.verification_status,
+              collected_date: costRecord.collected_date,
+              verified_at: costRecord.verified_at,
+            }
+          : null,
+      });
+    }
+
+    // 5. Compute Stats & Guidance Insights across all valid results
+    const facilitiesWithCosts = processedList.filter((f) => f.cost_record !== null);
+    let minCost = 0;
+    let maxCost = 0;
+    let avgCost = 0;
+    let potentialSavings = 0;
+    let savingsPercentage = 0;
+    let cheapestFacilityId: number | null = null;
+    let bestValueFacilityId: number | null = null;
+
+    if (facilitiesWithCosts.length > 0) {
+      const minAmounts = facilitiesWithCosts.map((f) => f.cost_record.amount_min);
+      const maxAmounts = facilitiesWithCosts.map((f) => f.cost_record.amount_max);
+      minCost = Math.min(...minAmounts);
+      maxCost = Math.max(...maxAmounts);
+
+      const totalMidpoints = facilitiesWithCosts.reduce((acc, f) => {
+        return acc + (f.cost_record.amount_min + f.cost_record.amount_max) / 2;
+      }, 0);
+      avgCost = Math.round(totalMidpoints / facilitiesWithCosts.length);
+
+      potentialSavings = maxCost - minCost;
+      savingsPercentage = maxCost > 0 ? Math.round((potentialSavings / maxCost) * 100) : 0;
+
+      // Identify cheapest facility
+      const cheapest = facilitiesWithCosts.find((f) => f.cost_record.amount_min === minCost);
+      cheapestFacilityId = cheapest ? cheapest.facility_id : null;
+
+      // Identify best value (verified preferred, close to minCost, low distance if available)
+      const verifiedOptions = facilitiesWithCosts.filter(
+        (f) => f.cost_record.verification_status === 'VERIFIED'
+      );
+      if (verifiedOptions.length > 0) {
+        verifiedOptions.sort((a, b) => a.cost_record.amount_min - b.cost_record.amount_min);
+        bestValueFacilityId = verifiedOptions[0].facility_id;
+      } else {
+        bestValueFacilityId = cheapestFacilityId;
+      }
+    }
+
+    // Assign badges and percentage differences
+    processedList.forEach((fac) => {
+      const badges: string[] = [];
+      if (fac.cost_record) {
+        if (fac.facility_id === cheapestFacilityId) {
+          badges.push('LOWEST_PRICE');
+        }
+        if (fac.facility_id === bestValueFacilityId && fac.facility_id !== cheapestFacilityId) {
+          badges.push('BEST_VALUE');
+        }
+        if (fac.cost_record.verification_status === 'VERIFIED') {
+          badges.push('VERIFIED_TARIFF');
+        }
+        if (avgCost > 0) {
+          const mid = (fac.cost_record.amount_min + fac.cost_record.amount_max) / 2;
+          const diffPct = Math.round(((avgCost - mid) / avgCost) * 100);
+          fac.vs_city_avg_percent = diffPct; // positive means cheaper than average
+        }
+      }
+      if (
+        fac.facility_name.toLowerCase().includes('general hospital') ||
+        fac.facility_name.toLowerCase().includes('trust') ||
+        fac.facility_name.toLowerCase().includes('poona hospital')
+      ) {
+        badges.push('TRUST_SUBSIDIZED');
+      }
+      fac.smart_badges = badges;
+    });
+
+    // 6. Sort results
+    processedList.sort((a, b) => {
+      if (sort === 'price_asc') {
+        const costA = a.cost_record ? a.cost_record.amount_min : Infinity;
+        const costB = b.cost_record ? b.cost_record.amount_min : Infinity;
+        return costA - costB;
+      } else if (sort === 'price_desc') {
+        const costA = a.cost_record ? a.cost_record.amount_max : -1;
+        const costB = b.cost_record ? b.cost_record.amount_max : -1;
+        return costB - costA;
+      } else if (sort === 'distance_asc') {
+        const distA = a.distance_km !== null ? a.distance_km : Infinity;
+        const distB = b.distance_km !== null ? b.distance_km : Infinity;
+        return distA - distB;
+      } else {
+        return a.facility_name.localeCompare(b.facility_name);
+      }
+    });
+
+    // 7. Paginate
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const limitNum = Math.max(1, parseInt(String(limit), 10) || 8);
+    const total = processedList.length;
+    const totalPages = Math.ceil(total / limitNum);
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginatedFacilities = processedList.slice(startIndex, startIndex + limitNum);
+
+    res.json({
+      success: true,
+      service: activeService,
+      all_services: allServices.map((s) => ({
+        service_id: s.service_id,
+        name: s.name,
+        category: s.category,
+      })),
+      stats: {
+        total_providers: facilitiesWithCosts.length,
+        min_cost: minCost,
+        max_cost: maxCost,
+        avg_cost: avgCost,
+        potential_savings: potentialSavings,
+        savings_percentage: savingsPercentage,
+        cheapest_facility_id: cheapestFacilityId,
+        best_value_facility_id: bestValueFacilityId,
+      },
+      facilities: paginatedFacilities,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        total_pages: totalPages,
+        has_more: pageNum < totalPages,
+      },
+      disclaimer:
+        'Information shown on MediGuide is for navigation and informational purposes. Approximate costs may change. Always confirm details, availability and final charges with the healthcare facility.',
+    });
+  } catch (error: any) {
+    console.error('Compare service error:', error);
+    res.status(500).json({ success: false, error: 'Failed to execute automatic cost comparison.' });
+  }
+});
 
 // TC-COST-01: Cost Comparison across multiple facilities
 router.get('/compare', async (req, res: Response) => {

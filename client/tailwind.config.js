@@ -7,37 +7,78 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Coordinated MediGuide Palette
+        teal: {
+          deep: '#075E54',
+          DEFAULT: '#075E54',
+        },
+        forest: {
+          deep: '#145747',
+          dark: '#0B3D32',
+          DEFAULT: '#145747',
+        },
+        emerald: {
+          accent: '#159A76',
+          DEFAULT: '#159A76',
+        },
+        mint: {
+          soft: '#DDF3E9',
+          DEFAULT: '#DDF3E9',
+        },
+        sage: {
+          pale: '#EDF4EF',
+          DEFAULT: '#EDF4EF',
+        },
+        charcoal: {
+          dark: '#202824',
+          secondary: '#596760',
+          DEFAULT: '#202824',
+        },
+        border: {
+          subtle: '#DCE6DF',
+          DEFAULT: '#DCE6DF',
+        },
+        ivory: {
+          warm: '#FAFAF7',
+          DEFAULT: '#FAFAF7',
+        },
         brand: {
-          50: '#ecfdf5',
-          100: '#d1fae5',
-          200: '#a7f3d0',
-          300: '#6ee7b7',
-          400: '#34d399',
-          500: '#10b981',
-          600: '#059669',
-          700: '#047857',
-          800: '#065f46',
-          900: '#064e3b',
+          50: '#F0F9F5',
+          100: '#DDF3E9', // Soft mint
+          200: '#C2E8D7',
+          300: '#92D5B7',
+          400: '#4AB78F',
+          500: '#159A76', // Fresh emerald accent
+          600: '#145747', // Forest green
+          700: '#075E54', // Deep teal
+          800: '#0B3D32', // Dark evergreen
+          900: '#052A22',
+          950: '#021813',
         },
-        sky: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
+        warm: {
+          25: '#FDFCF9',
+          50: '#FAFAF7', // Warm white
+          100: '#EDF4EF', // Pale sage
+          200: '#DCE6DF', // Subtle borders
+          300: '#CCD8D0',
+          400: '#A4B5A9',
+          500: '#7B8E81',
+          600: '#596760', // Secondary text
+          700: '#404C46',
+          800: '#2C3430',
+          900: '#202824', // Dark charcoal
         },
-        navy: {
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617',
-        }
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        heading: ['Outfit', 'Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        'glass': '0 8px 32px 0 rgba(16, 185, 129, 0.08)',
-        'card-hover': '0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 8px 12px -4px rgba(0, 0, 0, 0.04)',
+        'subtle': '0 1px 2px 0 rgba(32, 40, 36, 0.04)',
+        'card': '0 2px 5px 0 rgba(32, 40, 36, 0.04), 0 1px 2px -1px rgba(32, 40, 36, 0.03)',
+        'card-hover': '0 8px 24px -4px rgba(7, 94, 84, 0.12), 0 3px 8px -2px rgba(7, 94, 84, 0.06)',
+        'panel': '0 4px 20px -2px rgba(7, 94, 84, 0.08)',
+        'brand': '0 4px 14px 0 rgba(21, 154, 118, 0.25)',
       }
     },
   },

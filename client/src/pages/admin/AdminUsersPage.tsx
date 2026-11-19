@@ -111,7 +111,7 @@ export const AdminUsersPage: React.FC = () => {
             className="py-2 px-3 rounded-xl border border-slate-200 text-xs font-semibold bg-white text-slate-700 cursor-pointer"
           >
             <option value="ALL">All Roles ({users.length})</option>
-            <option value="USER">Registered Users</option>
+            <option value="USER">Patients / Healthcare Seekers</option>
             <option value="FACILITY_REPRESENTATIVE">Facility Representatives</option>
             <option value="ADMIN">Administrators</option>
           </select>

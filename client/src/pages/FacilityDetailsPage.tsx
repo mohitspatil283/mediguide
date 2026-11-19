@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { DataOriginBadge } from '../components/DataOriginBadge';
 import { ReportModal } from '../components/ReportModal';
+import { BookAppointmentModal } from '../components/BookAppointmentModal';
+import { OrderMedicineModal } from '../components/OrderMedicineModal';
 import { LeafletMap } from '../components/LeafletMap';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +31,7 @@ import {
 export const FacilityDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated } = useAuth();
   const { toggleFacility, isInCompare } = useCompare();
   const { toast } = useToast();
@@ -38,6 +41,8 @@ export const FacilityDetailsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [bookModalOpen, setBookModalOpen] = useState(false);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
 
   useEffect(() => {
     async function fetchFacility() {
@@ -47,6 +52,30 @@ export const FacilityDetailsPage: React.FC = () => {
         if (res.success && res.data) {
           setFacility(res.data);
           setIsSaved(res.data.is_saved);
+
+          // Track recently viewed facilities
+          try {
+            const raw = localStorage.getItem('mediguide_recently_viewed');
+            const history = raw ? JSON.parse(raw) : [];
+            const filtered = history.filter((item: any) => item.facility_id !== res.data.facility_id);
+            const updated = [
+              {
+                facility_id: res.data.facility_id,
+                facility_name: res.data.facility_name,
+                facility_type: res.data.facility_type,
+                city: res.data.city,
+                locality: res.data.locality,
+                verification_status: res.data.verification_status,
+                phone: res.data.phone,
+                operating_hours: res.data.operating_hours,
+                viewed_at: new Date().toISOString(),
+              },
+              ...filtered,
+            ].slice(0, 8);
+            localStorage.setItem('mediguide_recently_viewed', JSON.stringify(updated));
+          } catch (e) {
+            // Ignore storage write errors
+          }
         } else {
           setError('Facility not found.');
         }
@@ -88,7 +117,7 @@ export const FacilityDetailsPage: React.FC = () => {
   const handleToggleSave = async () => {
     if (!isAuthenticated) {
       toast('Please sign in or register to bookmark facilities.', 'info');
-      navigate('/login');
+      navigate('/login', { state: { from: location } });
       return;
     }
     try {
@@ -107,6 +136,11 @@ export const FacilityDetailsPage: React.FC = () => {
   };
 
   const handleToggleCompare = () => {
+    if (!isAuthenticated) {
+      toast('Please sign in to add facilities to cost comparison.', 'info');
+      navigate('/login', { state: { from: location } });
+      return;
+    }
     toggleFacility({
       facility_id: facility.facility_id,
       facility_name: facility.facility_name,
@@ -176,6 +210,36 @@ export const FacilityDetailsPage: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-2.5 sm:self-start">
+            {facility.facility_type === 'PHARMACY' ? (
+              <button
+                onClick={() => {
+                  if (!isAuthenticated) {
+                    toast('Please sign in to order medicines for home delivery.', 'info');
+                    navigate('/login', { state: { from: location } });
+                    return;
+                  }
+                  setOrderModalOpen(true);
+                }}
+                className="px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+              >
+                <span>🛵 Order for Delivery</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  if (!isAuthenticated) {
+                    toast('Please sign in to book an appointment.', 'info');
+                    navigate('/login', { state: { from: location } });
+                    return;
+                  }
+                  setBookModalOpen(true);
+                }}
+                className="px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Book Appointment</span>
+              </button>
+            )}
             <button
               onClick={handleToggleCompare}
               className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold border transition-all flex items-center gap-2 ${
@@ -212,7 +276,7 @@ export const FacilityDetailsPage: React.FC = () => {
               onClick={() => {
                 if (!isAuthenticated) {
                   toast('Please sign in or register to submit reports.', 'info');
-                  navigate('/login');
+                  navigate('/login', { state: { from: location } });
                   return;
                 }
                 setReportModalOpen(true);
@@ -409,6 +473,20 @@ export const FacilityDetailsPage: React.FC = () => {
         facilityName={facility.facility_name}
         isOpen={reportModalOpen}
         onClose={() => setReportModalOpen(false)}
+      />
+
+      {/* Book Appointment Modal */}
+      <BookAppointmentModal
+        facility={facility}
+        isOpen={bookModalOpen}
+        onClose={() => setBookModalOpen(false)}
+      />
+
+      {/* Order Medicine Modal */}
+      <OrderMedicineModal
+        pharmacy={facility}
+        isOpen={orderModalOpen}
+        onClose={() => setOrderModalOpen(false)}
       />
     </div>
   );

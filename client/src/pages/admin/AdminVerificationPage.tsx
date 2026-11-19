@@ -50,12 +50,45 @@ export const AdminVerificationPage: React.FC = () => {
     }
   };
 
+  const [notesModalOpen, setNotesModalOpen] = useState(false);
+  const [targetRevisionId, setTargetRevisionId] = useState<number | null>(null);
+  const [targetAction, setTargetAction] = useState<'REJECT' | 'CORRECTION_REQUESTED' | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+
+  const openNotesModal = (revisionId: number, action: 'REJECT' | 'CORRECTION_REQUESTED') => {
+    setTargetRevisionId(revisionId);
+    setTargetAction(action);
+    setReviewNotes('');
+    setNotesModalOpen(true);
+  };
+
+  const submitReviewWithNotes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetRevisionId || !targetAction) return;
+    if (!reviewNotes.trim()) {
+      toast('Please enter a brief note explaining the decision or requested corrections.', 'error');
+      return;
+    }
+
+    try {
+      const res = await api.reviewRevision(targetRevisionId, targetAction, reviewNotes.trim());
+      if (res.success) {
+        toast(res.message, 'success');
+        setNotesModalOpen(false);
+        fetchQueue();
+      }
+    } catch (err: any) {
+      toast(err.message || 'Action failed.', 'error');
+    }
+  };
+
   const handleRevisionAction = async (
     revisionId: number,
-    action: 'APPROVE' | 'REJECT' | 'CORRECTION_REQUESTED'
+    action: 'APPROVE' | 'REJECT' | 'CORRECTION_REQUESTED',
+    notes?: string
   ) => {
     try {
-      const res = await api.reviewRevision(revisionId, action);
+      const res = await api.reviewRevision(revisionId, action, notes);
       if (res.success) {
         toast(res.message, 'success');
         fetchQueue();
@@ -212,21 +245,21 @@ export const AdminVerificationPage: React.FC = () => {
                       <div className="pt-2 flex items-center justify-end gap-2.5">
                         <button
                           onClick={() =>
-                            handleRevisionAction(rev.revision_id, 'CORRECTION_REQUESTED')
+                            openNotesModal(rev.revision_id, 'CORRECTION_REQUESTED')
                           }
-                          className="px-3 py-1.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold text-xs"
+                          className="px-3 py-1.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold text-xs transition-colors"
                         >
                           Request Correction
                         </button>
                         <button
-                          onClick={() => handleRevisionAction(rev.revision_id, 'REJECT')}
-                          className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold text-xs"
+                          onClick={() => openNotesModal(rev.revision_id, 'REJECT')}
+                          className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold text-xs transition-colors"
                         >
                           Reject
                         </button>
                         <button
                           onClick={() => handleRevisionAction(rev.revision_id, 'APPROVE')}
-                          className="px-5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-xs"
+                          className="px-5 py-1.5 rounded-xl bg-forest-deep hover:bg-forest-dark text-white font-bold text-xs shadow-xs transition-colors"
                         >
                           Approve & Apply to Facility
                         </button>
@@ -236,6 +269,51 @@ export const AdminVerificationPage: React.FC = () => {
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Review Notes Modal */}
+      {notesModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <h3 className="text-lg font-bold text-slate-900">
+              {targetAction === 'CORRECTION_REQUESTED'
+                ? 'Request Revision Corrections'
+                : 'Reject Revision Ticket'}
+            </h3>
+            <p className="text-xs text-slate-500">
+              Provide specific feedback to the healthcare facility representative regarding this decision.
+            </p>
+            <form onSubmit={submitReviewWithNotes} className="space-y-4">
+              <textarea
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                placeholder="Reason or instructions for representative (e.g., Please provide the official tariff document)..."
+                rows={4}
+                required
+                className="w-full p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-forest-deep"
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNotesModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-bold text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-xl font-bold text-xs text-white ${
+                    targetAction === 'REJECT'
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : 'bg-amber-600 hover:bg-amber-700'
+                  }`}
+                >
+                  Submit Decision & Notify
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

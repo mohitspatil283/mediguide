@@ -45,6 +45,9 @@ export const api = {
   getMe: () => request<any>('/auth/me'),
   logout: () => request<any>('/auth/logout', { method: 'POST' }),
   updateProfile: (body: any) => request<any>('/auth/profile', { method: 'PUT', body: JSON.stringify(body) }),
+  forgotPassword: (email: string) => request<any>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  verifyResetCode: (email: string, code: string) => request<any>('/auth/verify-reset-code', { method: 'POST', body: JSON.stringify({ email, code }) }),
+  resetPassword: (body: any) => request<any>('/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
 
   // Facilities Search & Details
   searchFacilities: (params: Record<string, string | number | boolean | undefined>) => {
@@ -81,12 +84,57 @@ export const api = {
     if (serviceId) query.append('service_id', String(serviceId));
     return request<any>(`/costs/compare?${query.toString()}`);
   },
+  compareByService: (params: {
+    service_id?: number;
+    service_query?: string;
+    city?: string;
+    locality?: string;
+    lat?: number;
+    lng?: number;
+    radius?: number;
+    facility_type?: string;
+    min_price?: number;
+    max_price?: number;
+    verified_only?: boolean;
+    sort?: string;
+    page?: number;
+    limit?: number;
+  } = {}) => {
+    const query = new URLSearchParams();
+    if (params.service_id) query.append('service_id', String(params.service_id));
+    if (params.service_query) query.append('service_query', params.service_query);
+    if (params.city) query.append('city', params.city);
+    if (params.locality) query.append('locality', params.locality);
+    if (params.lat !== undefined) query.append('lat', String(params.lat));
+    if (params.lng !== undefined) query.append('lng', String(params.lng));
+    if (params.radius !== undefined) query.append('radius', String(params.radius));
+    if (params.facility_type) query.append('facility_type', params.facility_type);
+    if (params.min_price !== undefined) query.append('min_price', String(params.min_price));
+    if (params.max_price !== undefined) query.append('max_price', String(params.max_price));
+    if (params.verified_only !== undefined) query.append('verified_only', String(params.verified_only));
+    if (params.sort) query.append('sort', params.sort);
+    if (params.page !== undefined) query.append('page', String(params.page));
+    if (params.limit !== undefined) query.append('limit', String(params.limit));
+    return request<any>(`/costs/compare-service?${query.toString()}`);
+  },
   submitCost: (body: any) => request<any>('/costs/submit', { method: 'POST', body: JSON.stringify(body) }),
 
   // Saved Facilities
   getSavedFacilities: () => request<any>('/saved-facilities'),
   saveFacility: (facilityId: number) => request<any>(`/saved-facilities/${facilityId}`, { method: 'POST' }),
   removeSavedFacility: (facilityId: number) => request<any>(`/saved-facilities/${facilityId}`, { method: 'DELETE' }),
+
+  // Appointments
+  bookAppointment: (body: any) => request<any>('/appointments', { method: 'POST', body: JSON.stringify(body) }),
+  getMyAppointments: () => request<any>('/appointments/my-appointments'),
+  getFacilityAppointments: (facilityId: number) => request<any>(`/appointments/facility/${facilityId}`),
+  updateAppointmentStatus: (id: number, body: any) => request<any>(`/appointments/${id}/status`, { method: 'PUT', body: JSON.stringify(body) }),
+  cancelAppointment: (id: number) => request<any>(`/appointments/${id}`, { method: 'DELETE' }),
+
+  // Pharmacy Medicine Orders
+  createPharmacyOrder: (body: any) => request<any>('/pharmacy-orders', { method: 'POST', body: JSON.stringify(body) }),
+  getMyPharmacyOrders: () => request<any>('/pharmacy-orders/my-orders'),
+  updatePharmacyOrderStatus: (id: number, body: any) => request<any>(`/pharmacy-orders/${id}/status`, { method: 'PUT', body: JSON.stringify(body) }),
 
   // Reports
   submitReport: (body: any) => request<any>('/reports', { method: 'POST', body: JSON.stringify(body) }),
@@ -138,6 +186,9 @@ export const api = {
   },
   updateReportStatus: (id: number, status: string, admin_notes?: string) =>
     request<any>(`/admin/reports/${id}`, { method: 'PUT', body: JSON.stringify({ status, admin_notes }) }),
+  registerFacility: (body: any) => request<any>('/auth/register-facility', { method: 'POST', body: JSON.stringify(body) }),
+  rescheduleAppointment: (id: number, body: any) => request<any>(`/appointments/${id}/status`, { method: 'PUT', body: JSON.stringify(body) }),
+  getFacilityAppointmentsForRep: (facilityId: number) => request<any>(`/appointments/facility/${facilityId}`),
 
   getAdminAuditLogs: (params?: { limit?: number; offset?: number; action?: string }) => {
     const q = new URLSearchParams(params as any).toString();

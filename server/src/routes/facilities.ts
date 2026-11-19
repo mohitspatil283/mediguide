@@ -417,6 +417,9 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
     const facility = await prisma.facility.findUnique({
       where: { facility_id: facilityId },
       include: {
+        representatives: {
+          select: { user_id: true, status: true },
+        },
         facility_services: {
           include: {
             service: true,
@@ -470,6 +473,8 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
         distance_km,
         distance_label: distance_km !== null ? `${distance_km} km away` : null,
         is_saved,
+        has_active_account: (facility.representatives && facility.representatives.length > 0) || facility.data_origin === 'OFFICIAL_VERIFIED' || facility.status === 'VERIFIED',
+        home_delivery_available: facility.facility_type === 'PHARMACY',
         services: facility.facility_services.map((fs) => fs.service),
         cost_records: facility.cost_records.map((c) => ({
           cost_id: c.cost_id,

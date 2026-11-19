@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../config/prisma';
 import { authenticate, requireRole, AuthRequest } from '../middleware/auth';
 import { logAuditEvent } from '../utils/audit';
+import { sendFacilityRegistrationDecisionEmail } from '../utils/email';
 
 const router = Router();
 
